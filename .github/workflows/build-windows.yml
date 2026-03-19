@@ -688,6 +688,25 @@ jobs:
           echo "## Build Artifacts"
           find target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle -type f \( -name "*.msi" -o -name "*.exe" \) -exec ls -lh {} \;
 
+      - name: Create portable zip
+        shell: pwsh
+        run: |
+          $profile = "${{ steps.build-profile.outputs.profile }}"
+          $version = "${{ steps.get-version.outputs.version }}"
+          $binDir = "target/x86_64-pc-windows-msvc/$profile"
+          $zipName = "meetily-windows-x64-$profile-$version-portable.zip"
+
+          # Collect the main exe and all required sidecar binaries/resources
+          $files = @()
+          $files += Get-Item "$binDir/meetily.exe" -ErrorAction SilentlyContinue
+          $files += Get-ChildItem "$binDir/" -Filter "*.dll" -ErrorAction SilentlyContinue
+          $files += Get-ChildItem "frontend/src-tauri/binaries/" -ErrorAction SilentlyContinue
+          $files += Get-ChildItem "frontend/src-tauri/vulkan-runtime/" -ErrorAction SilentlyContinue
+
+          Compress-Archive -Path $files.FullName -DestinationPath $zipName -Force
+          Write-Host "Created $zipName"
+          Get-Item $zipName | Select-Object Name, Length
+
       - name: Upload artifacts
         if: ${{ github.event.inputs.upload-artifacts == 'true' }}
         uses: actions/upload-artifact@v4
@@ -698,6 +717,7 @@ jobs:
             target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi.sig
             target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
             target/x86_64-pc-windows-msvc/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe.sig
+            meetily-windows-x64-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}-portable.zip
           retention-days: 30
 
       - name: Generate build summary
