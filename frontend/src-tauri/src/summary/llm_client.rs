@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-const REQUEST_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
+const REQUEST_TIMEOUT_DURATION: Duration = Duration::from_secs(3600);
 
 // Generic structure for OpenAI-compatible API chat messages
 #[derive(Debug, Serialize)]
@@ -225,22 +225,28 @@ pub async fn generate_summary(
             (None, None, None)
         };
 
-        serde_json::json!(ChatRequest {
-            model: model_name.to_string(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: system_prompt.to_string(),
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: user_prompt.to_string(),
-                }
-            ],
-            max_tokens: max_tokens_val,
-            temperature: temperature_val,
-            top_p: top_p_val,
-        })
+        {
+            let mut body = serde_json::json!(ChatRequest {
+                model: model_name.to_string(),
+                messages: vec![
+                    ChatMessage {
+                        role: "system".to_string(),
+                        content: system_prompt.to_string(),
+                    },
+                    ChatMessage {
+                        role: "user".to_string(),
+                        content: user_prompt.to_string(),
+                    }
+                ],
+                max_tokens: max_tokens_val,
+                temperature: temperature_val,
+                top_p: top_p_val,
+            });
+            if provider == &LLMProvider::Ollama {
+                body["think"] = serde_json::json!(false);
+            }
+            body
+        }
     } else {
         serde_json::json!(ClaudeRequest {
             system: system_prompt.to_string(),
@@ -269,7 +275,7 @@ pub async fn generate_summary(
             result = request_future => {
                 result.map_err(|e| {
                     if e.is_timeout() {
-                        format!("LLM request timed out after 60 seconds")
+                        format!("LLM request timed out after 60 minutes")
                     } else {
                         format!("Failed to send request to LLM: {}", e)
                     }
@@ -282,7 +288,7 @@ pub async fn generate_summary(
     } else {
         request_future.await.map_err(|e| {
             if e.is_timeout() {
-                format!("LLM request timed out after 60 seconds")
+                format!("LLM request timed out after 60 minutes")
             } else {
                 format!("Failed to send request to LLM: {}", e)
             }
